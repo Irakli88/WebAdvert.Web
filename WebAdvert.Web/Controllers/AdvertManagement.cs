@@ -28,11 +28,9 @@ namespace WebAdvert.Web.Controllers
             if (ModelState.IsValid)
             {
                 var id = "1111";  //this is the ID of advertisment saved to DB prior to this call
-
-                var fileName = "";
                 if (imageFile != null)
                 {
-                    fileName = !string.IsNullOrWhiteSpace(imageFile.FileName) ? Path.GetFileName(imageFile.FileName) : id;
+                    string fileName = !string.IsNullOrWhiteSpace(imageFile.FileName) ? Path.GetFileName(imageFile.FileName) : id;
                     var filePath = $"{id}/{fileName}";
 
                     try

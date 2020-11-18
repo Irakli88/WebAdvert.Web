@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using AdvertApi.Models;
+using AutoMapper;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using WebAdvert.Web.Models.AdvertManagement;
+using WebAdvert.Web.ServiceClients;
 using WebAdvert.Web.Services;
 
 namespace WebAdvert.Web.Controllers
@@ -13,10 +16,14 @@ namespace WebAdvert.Web.Controllers
     public class AdvertManagement : Controller
     {
         public readonly IFileUploader _fileUploader;
+        private readonly IAdvertApiClient _advertApiClient;
+        private readonly IMapper _mapper;
 
-        public AdvertManagement(IFileUploader fileUploader)
+        public AdvertManagement(IFileUploader fileUploader, IAdvertApiClient advertApiClient, IMapper mapper)
         {
             _fileUploader = fileUploader;
+            _advertApiClient = advertApiClient;
+            _mapper = mapper;
         }
         public IActionResult Create(CreateAdvertViewModel model)
         {
@@ -27,7 +34,11 @@ namespace WebAdvert.Web.Controllers
         {
             if (ModelState.IsValid)
             {
-                var id = "1111";  //this is the ID of advertisment saved to DB prior to this call
+                var createAdvertModel = _mapper.Map<CreateAdvertModel>(model);
+                var apiCallResponse = await _advertApiClient.Create(createAdvertModel);
+
+                var id = apiCallResponse.Id;  //check if Id is valid
+
                 if (imageFile != null)
                 {
                     string fileName = !string.IsNullOrWhiteSpace(imageFile.FileName) ? Path.GetFileName(imageFile.FileName) : id;
@@ -42,14 +53,31 @@ namespace WebAdvert.Web.Controllers
                                 throw new Exception("Could not upload the image to the file repository. Please see the logs.");
                         }
 
-                        //call advert API and confirm advertisement
+                        var confirmAdvertRequest = new ConfirmAdvertRequest()
+                        {
+                            Id = id,
+                            FilePath = filePath,
+                            Status = AdvertStatus.Active
+                        };
+
+                        var canConfirm = await _advertApiClient.Confirm(confirmAdvertRequest);
+                        if (!canConfirm)
+                        {
+                            throw new Exception($"Cannot confirm Advert of Id={id}");
+                        }
 
                         return RedirectToAction("Index", "Home");
                     }
                     catch (Exception ex)
                     {
-                        //call advert API and cancel the advertisement
-                        Console.WriteLine(ex);
+                        var confirmAdvertRequest = new ConfirmAdvertRequest()
+                        {
+                            Id = id,
+                            FilePath = filePath,
+                            Status = AdvertStatus.Pending
+                        };
+                        await _advertApiClient.Confirm(confirmAdvertRequest);
+                        Console.WriteLine(ex); //use logger
                     }
                 }
             }
